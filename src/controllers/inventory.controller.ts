@@ -1,8 +1,10 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from 'express';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
+
+import connection from '../config/db';
 
 interface Product {
   name: string;
-  id: number;
   quantity: number;
   description: string;
   price: number;
@@ -12,100 +14,98 @@ interface InventoryParams {
   productId: number;
 }
 
-let data: Product[] = [];
+// TODO isolate interfaces/types to a declaration file
+// TODO main function
+// TODO send response
+// TODO validate
+// TODO error handling
 
-//todo
-export function retrieveAllProducts(req: Request, res: Response) {
-  // validations
-  // retrieve product
-  // failed response, throw error
-  // success response, res.send(product)
+export async function retrieveAllProducts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const [rows] = await connection.execute<RowDataPacket[]>('SELECT * FROM products');
 
-  const products = data;
+    if (rows.length) throw Error;
 
-  res
-    .status(200)
-    .json({ msg: "success! retrieved all products", data: products });
+    res.status(200).json({ msg: 'success! retrieved all products', data: rows });
+  } catch (error) {
+    // pass to centralized error handler, next(error)
+    res.status(500).json({ msg: 'failed! unable to retrieve all products' });
+  }
 }
 
-//todo
-export function retrieveOneProduct(
+export async function retrieveOneProduct(
   req: Request<InventoryParams>,
   res: Response,
+  next: NextFunction
 ) {
-  // validations
-  // retrieve product
-  // failed response, throw error
-  // success response, res.send(product)
+  try {
+    const { productId } = req.params;
 
-  const product = data.find((val) => val.id === +req.params.productId);
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      'SELECT * FROM products WHERE productId = ?',
+      [productId]
+    );
 
-  if (!product) {
-    res.status(404).json({ msg: "failed! unable to retrieve product" });
-    return;
+    if (!rows.length) throw Error;
+
+    res.status(200).json({ msg: 'success! retrieved one product', data: rows });
+  } catch (error) {
+    // pass to centralized error handler, next(error)
+    res.status(500).json({ msg: 'failed! unable to retrieve one product' });
   }
-
-  res.status(200).json({ msg: "success! retrieved a product", data: product });
 }
 
-// todo
-export function addProduct(req: Request<{}, {}, Product>, res: Response) {
-  // validations
-  // add a product
-  // failed response, throw error
-  // success response, res.send(product)
-  data.push(req.body);
-  res.status(200).json({ msg: "success! added a product" });
+export async function addProduct(req: Request<{}, {}, Product>, res: Response) {
+  try {
+    const { name, description, quantity, price } = req.body;
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      'INSERT INTO product (name,description,quantity,price) VALUES (?,?,?,?)',
+      [name, description, quantity, price]
+    );
+
+    if (!result.affectedRows) throw Error;
+
+    res.status(200).json({ msg: 'success! added a product', data: req.body });
+  } catch (error) {
+    // pass to centralized error handler, next(error)
+    res.status(500).json({ msg: 'failed! unable to add product' });
+  }
 }
 
-// todo
-export function updateProduct(
-  req: Request<InventoryParams, {}, Product>,
-  res: Response,
-) {
-  // validations
-  // update a product
-  // failed response, throw error
-  // success response, res.send(product)
+export async function updateProduct(req: Request<InventoryParams, {}, Product>, res: Response) {
+  try {
+    const { productId } = req.params;
+    const { name, price, quantity, description } = req.body;
 
-  const product = data.find((val) => val.id === +req.params.productId);
+    const [result] = await connection.execute<ResultSetHeader>(
+      'UPDATE products SET name = ?, price = ?, quantity = ?, description = ? WHERE productId = ? ',
+      [name, price, quantity, description, productId]
+    );
 
-  if (!product) {
-    res.status(404).json({ msg: "failed! unable to update a product" });
-    return;
+    if (!result.affectedRows) throw Error;
+
+    res.status(200).json({ msg: 'success! updated a product', data: req.body });
+  } catch (error) {
+    // pass to centralized error handler, next(error)
+    res.status(500).json({ msg: 'failed! unable to update product' });
   }
-
-  const updatedProduct = { ...product, ...req.body };
-
-  const newProductObj = data.map((val) =>
-    val.id === +req.params.productId ? updatedProduct : val,
-  );
-
-  data = newProductObj;
-
-  res
-    .status(200)
-    .json({ msg: "success! updated a product", data: updatedProduct });
 }
 
-// todo
-// review soft delete
-export function deleteProduct(req: Request<InventoryParams>, res: Response) {
-  // validations
-  // delete a product
-  // failed response, throw error
-  // success response, res.send(product)
+export async function deleteProduct(req: Request<InventoryParams>, res: Response) {
+  try {
+    const { productId } = req.params;
 
-  const product = data.find((val) => val.id === +req.params.productId);
+    const [result] = await connection.execute<ResultSetHeader>(
+      'DELETE FROM products WHERE productId =?',
+      [productId]
+    );
 
-  if (!product) {
-    res.status(404).json({ msg: "failed! unable to delete a product" });
-    return;
+    if (!result.affectedRows) throw Error;
+
+    res.status(200).json({ msg: 'success! deleted a product' });
+  } catch (error) {
+    // pass to centralized error handler, next(error)
+    res.status(500).json({ msg: 'failed! unable to update product' });
   }
-
-  const newProductObj = data.filter((val) => val.id !== +req.params.productId);
-
-  data = newProductObj;
-
-  res.status(200).json({ msg: "success! deleted a product", data: product });
 }
