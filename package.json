@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rimraf dist & npx tsc",
     "start": "node ./dist/index.js",
-    "start:dev": "concurrently \"npx tsc -watch\" \"nodemon ./src/index.ts\""
+    "start:dev": "concurrently \"npx tsc -watch\" \"set NODE_ENV=development && nodemon ./src/index.ts\""
   },
   "keywords": [],
   "author": "",
