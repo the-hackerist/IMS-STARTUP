@@ -55,7 +55,7 @@ export const addProduct: RequestHandler<{}, any, Product> = async (req, res, nex
     // review sql injection attacks
 
     let [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO product (name,description,quantity,price) VALUES (?,?,?,?)`,
+      `INSERT INTO products (name,description,quantity,price) VALUES (?,?,?,?)`,
       [name, safeDescription, quantity, price]
       // review nullish coalescing, replaces only null/undefined
     );
