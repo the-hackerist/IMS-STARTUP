@@ -49,7 +49,8 @@ export const retrieveAllProducts: RequestHandler<any, any, {}, QueryRetrieveProd
 
     const [rows] = await connection.execute<RowDataPacket[]>(query, parametrizedValues);
     res.status(200).json({
-      msg: 'success! retrieved all products',
+      success: true,
+      message: 'success! retrieved all products',
       data: {
         products: rows,
         pagination: {
@@ -78,12 +79,12 @@ export const retrieveOneProduct: RequestHandler<
     // RETRIEVE A PRODUCT BASED ON ALLOWED FIELD AND SEARCH STRING
     // SEARCH BY NAME, PRODUCT_ID, BARCODE
     const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT * FROM products WHERE ${field} = ?`,
+      `SELECT * FROM products WHERE ${field || 'product_id'} = ?`,
       [search]
     );
     if (!rows.length) throw new AppError('Product does not exist', 404);
 
-    res.status(200).json({ msg: 'success! retrieved one product', data: rows });
+    res.status(200).json({ success: true, message: 'success! retrieved one product', data: rows });
   } catch (error) {
     next(error);
   }
@@ -97,7 +98,7 @@ export const addProduct: RequestHandler<{}, any, Product> = async (req, res, nex
     const safeBarcode: string | null = barcode ?? null;
 
     // CHECK FIRST IF PRODUCT ALREADY EXISTS
-    let [isProductExist] = await connection.execute<RowDataPacket[]>(
+    const [isProductExist] = await connection.execute<RowDataPacket[]>(
       'SELECT * FROM products WHERE name = ?',
       [name]
     );
@@ -105,13 +106,19 @@ export const addProduct: RequestHandler<{}, any, Product> = async (req, res, nex
       throw new AppError('A product with this name already exists', 409);
 
     // INSERT NEW PRODUCT TO MYSQL DB
-    let [result] = await connection.execute<ResultSetHeader>(
+    const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO products (name,barcode,stock_quantity,price) VALUES (?,?,?,?)`,
       [name, safeBarcode, stockQuantity, price]
     );
     if (!result.affectedRows) throw Error;
 
-    res.status(200).json({ msg: 'success! added a product', data: req.body });
+    // RETRIEVE
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      `SELECT * FROM products WHERE name = ?`,
+      [name]
+    );
+
+    res.status(200).json({ success: true, message: 'success! added a product', data: rows });
   } catch (error) {
     next(error);
   }
@@ -151,7 +158,7 @@ export const updateProduct: RequestHandler<ParamsProducts, any, Partial<Product>
     const query = `Update products SET ${updatedFields.join(', ')} WHERE product_id = ?`; // FINAL QUERY STRING
     const [result] = await connection.execute<ResultSetHeader>(query, updatedValues); // UPDATE PRODUCT
     if (result.affectedRows === 0) throw Error; // FAILED TO UPDATE PRODUCT, SEND ERROR MSG
-    res.status(200).json({ msg: 'success! updated a product', data: req.body }); // IF SUCCESS, SEND JSON
+    res.status(200).json({ success: true, message: 'success! updated a product', data: req.body }); // IF SUCCESS, SEND JSON
   } catch (error) {
     next(error); // PASS ERROR TO CENTRALIZED ERROR HANDLER
   }

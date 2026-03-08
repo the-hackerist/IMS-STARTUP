@@ -55,13 +55,13 @@ export const retrieveOneProductValidator = [
     .notEmpty()
     .withMessage('A search string is required')
     .trim()
-    .isLength({ min: 3, max: 150 })
+    .isLength({ min: 1, max: 150 })
     .withMessage('A search string must be between 3 and 150 characters'),
 
   query('field')
     .optional({ checkFalsy: true })
     .trim()
-    .isLength({ min: 8, max: 100 })
+    .isLength({ min: 1, max: 100 })
     .withMessage('A search field must be between 8 and 100 characters'),
 ];
 
