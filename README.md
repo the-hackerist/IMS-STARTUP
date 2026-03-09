@@ -70,7 +70,7 @@ Returns a paginated list of products.
 ### Endpoint
 
 ```
-GET /products
+GET /product
 ```
 
 ### Query Parameters
@@ -139,9 +139,9 @@ GET /product/:search
 
 ### Params Parameters
 
-| Parameter | Type   | Required | Accepted Value/s               |
-| --------- | ------ | -------- | ------------------------------ |
-| field     | string | yes      | `search string based on field` |
+| Parameter | Type   | Required | Accepted Value/s                        |
+| --------- | ------ | -------- | --------------------------------------- |
+| field     | string | yes      | `search string based on provided field` |
 
 ### Example Request
 
@@ -232,7 +232,7 @@ Updates one or more fields of a product.
 ### Endpoint
 
 ```
-PATCH /products/:productId
+PATCH /update-product/:productId
 ```
 
 ### Params Parameters
@@ -283,7 +283,7 @@ Deletes a product.
 ### Endpoint
 
 ```
-DELETE /products/:productId
+DELETE /delete-product/:productId
 ```
 
 ### Params Parameters
@@ -333,6 +333,6 @@ npm install
 npm run start:dev
 ```
 
-4️⃣ Run postman (https://shorturl.at/UyMh4)
+4️⃣ Test: run endpoints in postman (https://shorturl.at/UyMh4)
 
 ---
