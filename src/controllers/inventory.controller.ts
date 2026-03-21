@@ -78,9 +78,14 @@ export const retrieveOneProduct: RequestHandler<
 
     // RETRIEVE A PRODUCT BASED ON ALLOWED FIELD AND SEARCH STRING
     // SEARCH BY NAME, PRODUCT_ID, BARCODE
+    // ALWAYS PRODUCE ONE DATA
+
+    const parameterizedValues: (string | number)[] = [field === 'name' ? `%${search}%` : search];
+    if (field === 'name') parameterizedValues.push(1);
+
     const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT * FROM products WHERE ${field || 'product_id'} = ?`,
-      [search]
+      `SELECT * FROM products ${field === 'name' ? `WHERE name LIKE` : `WHERE product_id =`} ? ${field === 'name' ? 'LIMIT ?' : ''}`,
+      parameterizedValues
     );
     if (!rows.length) throw new AppError('Product does not exist', 404);
 
