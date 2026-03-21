@@ -55,7 +55,7 @@ export const retrieveUser: RequestHandler = async (req, res, next) => {
     if (!userId) throw new AppError('User ID not found', HttpStatusCodes.NOT_FOUND);
 
     const [rows] = await connection.execute<RetrieveUserQuery[]>(
-      'SELECT id, email, username FROM users WHERE id = ?',
+      'SELECT id, email, username, store_id FROM users WHERE id = ?',
       [userId]
     );
     const user = rows[0];
@@ -76,7 +76,11 @@ interface RegisterUserQuery extends RowDataPacket {
 type RegisterUserResData = {
   id: number;
   email: string;
+  storeId: number;
 };
+
+// Manual setting of store ID since there is no registration
+const CURRENT_STORE_ID = 1;
 
 export const registerUser: RequestHandler<any, any, RegisterUserBody> = async (req, res, next) => {
   try {
@@ -92,12 +96,12 @@ export const registerUser: RequestHandler<any, any, RegisterUserBody> = async (r
     const hashedPassword = hashPassword(password);
     const safeUsername = safeProperty(username); // if theres no username provided then set value to null as undefined is not accepted in db
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO users (username,email,password) VALUES(?,?,?)',
-      [safeUsername, email, hashedPassword]
+      'INSERT INTO users (username,email,password,store_id) VALUES(?,?,?,?)',
+      [safeUsername, email, hashedPassword, CURRENT_STORE_ID]
     );
     if (!result.affectedRows) throw new Error();
 
-    const data: RegisterUserResData = { id: result.insertId, email };
+    const data: RegisterUserResData = { id: result.insertId, email, storeId: CURRENT_STORE_ID };
     sendResponse(res, { data, status: HttpStatusCodes.CREATED });
   } catch (error) {
     next(error);
@@ -131,13 +135,13 @@ export const loginUser: RequestHandler<any, any, LoginUserBody> = async (req, re
     const { email, password } = req.body;
 
     const [rows] = await connection.execute<LoginUserQuery[]>(
-      'SELECT id,email,password,username FROM users WHERE email = ?',
+      'SELECT id,email,password,username,store_id FROM users WHERE email = ?',
       [email]
     );
     const user = rows[0];
     if (!user) throw new AppError('User not found', HttpStatusCodes.NOT_FOUND);
 
-    const isPasswordValid = validateHashedPassword(password, user.password);
+    const isPasswordValid = validateHashedPassword(user.password, password);
     if (!isPasswordValid) throw new AppError('Invalid credentials', HttpStatusCodes.BAD_REQUEST);
 
     const { password: pass, ...userDetails } = user;
