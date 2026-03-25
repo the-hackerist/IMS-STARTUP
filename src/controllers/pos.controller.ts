@@ -17,7 +17,7 @@ interface RetrieveAllSalesQueries {
   minTotalAmount: string;
   maxTotalAmount: string;
 }
-
+// idea filtering with multiple fields
 export const retrieveAllSales: RequestHandler<
   {},
   any,
@@ -53,61 +53,72 @@ export const retrieveAllSales: RequestHandler<
     const PAGE_DEFAULT = 1;
     const LIMIT_DEFAULT = 10;
 
+    // whitelist column names to prevent SQL injection
+    const allowedSortFields = ['created_at', 'total_amount', 'voided_at', 'status', 'id'];
+    const allowedFilterFields = ['created_at', 'voided_at', 'total_amount', 'id', 'status'];
+    const safeSortBy = allowedSortFields.includes(String(sortBy))
+      ? String(sortBy)
+      : SORT_FIELD_DEFAULT;
+    const safeSortDir = String(sortDirection).toUpperCase() === 'DESC' ? 'DESC' : SORT_DIR_DEFAULT;
+    const safeFilterField = allowedFilterFields.includes(String(filterField))
+      ? String(filterField)
+      : null;
+
+    // validated integers — interpolated into SQL to avoid ER_WRONG_ARGUMENTS on Railway
+    const currentPage = Math.max(1, Number(page) || PAGE_DEFAULT);
+    const currentLimit = Math.max(1, Number(limit) || LIMIT_DEFAULT);
+    const skippedRecords = (currentPage - 1) * currentLimit;
+
     let query = ['SELECT * FROM sales', 'WHERE store_id = ?'];
     let data: (string | number)[] = [storeId];
 
     let filterClause = '';
-    const orderClause = `ORDER BY ${sortBy ?? SORT_FIELD_DEFAULT} ${sortDirection ?? SORT_DIR_DEFAULT}`;
-    const limitClause = 'LIMIT ?';
-    const offsetClause = 'OFFSET ?';
+    const orderClause = `ORDER BY ${safeSortBy} ${safeSortDir}`;
 
-    if (filterField === 'created_at' || filterField === 'voided_at') {
+    if (safeFilterField === 'created_at' || safeFilterField === 'voided_at') {
       if (startDate && !endDate) {
-        filterClause = `AND ${filterField} >= ?`;
+        filterClause = `AND ${safeFilterField} >= ?`;
         data.push(startDate);
       }
 
       if (!startDate && endDate) {
-        filterClause = `AND ${filterField} <= ?`;
+        filterClause = `AND ${safeFilterField} <= ?`;
         data.push(endDate);
       }
 
       if (startDate && endDate) {
-        filterClause = `AND ${filterField} BETWEEN ? AND ?`;
+        filterClause = `AND ${safeFilterField} BETWEEN ? AND ?`;
         data.push(startDate, endDate);
       }
 
       query.push(filterClause);
     }
 
-    if (filterField === 'total_amount') {
+    if (safeFilterField === 'total_amount') {
       if (minTotalAmount && !maxTotalAmount) {
-        filterClause = `AND ${filterField} >= ?`;
+        filterClause = `AND ${safeFilterField} >= ?`;
         data.push(minTotalAmount);
       }
 
       if (!minTotalAmount && maxTotalAmount) {
-        filterClause = `AND ${filterField} <= ?`;
+        filterClause = `AND ${safeFilterField} <= ?`;
         data.push(maxTotalAmount);
       }
 
       if (minTotalAmount && maxTotalAmount) {
-        filterClause = `AND ${filterField} BETWEEN ? AND ?`;
+        filterClause = `AND ${safeFilterField} BETWEEN ? AND ?`;
         data.push(minTotalAmount, maxTotalAmount);
       }
 
       query.push(filterClause);
     }
 
-    if (filter) {
-      filterClause = `AND ${filterField} = ?`;
+    if (filter && safeFilterField) {
+      filterClause = `AND ${safeFilterField} = ?`;
       data.push(filter);
       query.push(filterClause);
     }
 
-    const currentPage = +(page ?? PAGE_DEFAULT);
-    const currentLimit = +(limit ?? LIMIT_DEFAULT);
-    const skippedRecords = (currentPage - 1) * currentLimit;
     const paginationQuery = query.join(' ').replace('SELECT *', 'SELECT COUNT(*) as total');
     const [[{ total }]] = await connection.execute<RowDataPacket[]>(paginationQuery, data);
     const totalPages = Math.ceil(total / currentLimit);
@@ -115,8 +126,7 @@ export const retrieveAllSales: RequestHandler<
     const pagination = { currentPage, currentLimit, total, totalPages };
 
     query.push(orderClause);
-    data.push(currentLimit, skippedRecords);
-    query.push(limitClause, offsetClause);
+    query.push(`LIMIT ${currentLimit} OFFSET ${skippedRecords}`);
 
     const [rows] = await connection.execute(query.join(' '), data);
 
@@ -155,7 +165,7 @@ interface AddSalesBody {
 export const addSales: RequestHandler<{}, any, AddSalesBody> = async (req, res, next) => {
   try {
     // todo db transactions, if any of these queries fail then rollback db
-
+    // todo makes sure product is valid
     // GET USERID AND STORE ID
     const { salesItems } = req.body;
     const userId = req.user?.userId;

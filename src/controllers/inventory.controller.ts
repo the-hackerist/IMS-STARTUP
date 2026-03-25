@@ -19,46 +19,50 @@ export const retrieveAllProducts: RequestHandler<any, any, {}, QueryRetrieveProd
   try {
     const { page, limit, filterField, filter, sortBy, sortDirection } = req.query;
 
-    // CONSTANTS & HELPERS
     const DEFAULT_PAGE = 1;
     const DEFAULT_LIMIT = 10;
-    const convertToZeroBasedIdx = (num: number) => num - 1;
     const isFilterExist = filter && filterField ? true : false;
 
-    // PAGINATION
-    const currPage = +page || DEFAULT_PAGE;
-    const currLimit = +limit || DEFAULT_LIMIT;
-    const offset = convertToZeroBasedIdx(currPage) * currLimit;
+    // validated integers
+    const currPage = Math.max(1, Number(page) || DEFAULT_PAGE);
+    const currLimit = Math.max(1, Number(limit) || DEFAULT_LIMIT);
+    const offset = (currPage - 1) * currLimit;
 
-    // CONDITIONALLY GENERATE SQL QUERIES
-    const sortQuery = `ORDER BY ${sortBy || 'created_at'} ${sortDirection || 'DESC'}`;
-    const filterQuery = `WHERE ${filterField} LIKE ?`;
-    const query = `SELECT * FROM products ${isFilterExist ? filterQuery : ''} ${sortBy ? sortQuery : ''}  LIMIT ? OFFSET ?`;
+    // whitelist column names (add other allowed columns as needed)
+    const allowedSortFields = ['created_at', 'name', 'price', 'stock_quantity'];
+    const allowedFilterFields = ['name', 'barcode', 'product_id'];
+    const safeSortBy = allowedSortFields.includes(String(sortBy)) ? String(sortBy) : 'created_at';
+    const safeFilterField = allowedFilterFields.includes(String(filterField))
+      ? String(filterField)
+      : null;
+    const safeSortDir = String(sortDirection).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-    // PARAMETERIZED VALUES ARRAY
-    const parametrizedValues: (string | number)[] = [currLimit, offset];
-    if (isFilterExist) parametrizedValues.unshift(`%${filter}%`);
+    const sortQuery = `ORDER BY ${safeSortBy} ${safeSortDir}`;
+    const filterQuery = safeFilterField ? `WHERE ${safeFilterField} LIKE ?` : '';
 
-    // GET TOTAL PAGES
+    // interpolate validated numeric LIMIT/OFFSET (safe because validated)
+    const query = `SELECT * FROM products ${filterQuery} ${sortQuery} LIMIT ${currLimit} OFFSET ${offset}`;
+
+    const parametrizedValues: (string | number)[] = [];
+    if (isFilterExist && safeFilterField) parametrizedValues.push(`%${filter}%`);
+
+    // count query uses same filter param (no LIMIT/OFFSET)
     const [[{ total }]] = await connection.execute<RowDataPacket[]>(
-      `SELECT COUNT(*) as total FROM products ${isFilterExist ? filterQuery : ''}`,
-      isFilterExist ? [`%${filter}%`] : []
+      `SELECT COUNT(*) as total FROM products ${filterQuery}`,
+      parametrizedValues.length ? parametrizedValues : []
     );
+
     const totalPages = Math.ceil(total / currLimit);
     if (currPage > totalPages && totalPages > 0) throw new AppError('Page not found', 400);
 
     const [rows] = await connection.execute<RowDataPacket[]>(query, parametrizedValues);
+
     res.status(200).json({
       success: true,
       message: 'success! retrieved all products',
       data: {
         products: rows,
-        pagination: {
-          page: currPage,
-          limit: currLimit,
-          total,
-          totalPages,
-        },
+        pagination: { page: currPage, limit: currLimit, total, totalPages },
       },
     });
   } catch (error) {
@@ -81,10 +85,9 @@ export const retrieveOneProduct: RequestHandler<
     // ALWAYS PRODUCE ONE DATA
 
     const parameterizedValues: (string | number)[] = [field === 'name' ? `%${search}%` : search];
-    if (field === 'name') parameterizedValues.push(1);
 
     const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT * FROM products ${field === 'name' ? `WHERE name LIKE` : `WHERE product_id =`} ? ${field === 'name' ? 'LIMIT ?' : ''}`,
+      `SELECT * FROM products ${field === 'name' ? `WHERE name LIKE ? LIMIT 1` : `WHERE product_id = ?`}`,
       parameterizedValues
     );
     if (!rows.length) throw new AppError('Product does not exist', 404);
@@ -99,6 +102,14 @@ export const addProduct: RequestHandler<{}, any, Product> = async (req, res, nex
   try {
     const { name, barcode, stockQuantity, price } = req.body;
 
+    const userId = req.user?.userId;
+    const [userRows] = await connection.execute<RowDataPacket[]>(
+      'SELECT store_id FROM users WHERE id = ?',
+      [userId as number]
+    );
+
+    const storeId = userRows[0].store_id;
+
     // MYSQL DB ONLY KNOWS NULL NOT UNDEFINED
     const safeBarcode: string | null = barcode ?? null;
 
@@ -112,8 +123,8 @@ export const addProduct: RequestHandler<{}, any, Product> = async (req, res, nex
 
     // INSERT NEW PRODUCT TO MYSQL DB
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO products (name,barcode,stock_quantity,price) VALUES (?,?,?,?)`,
-      [name, safeBarcode, stockQuantity, price]
+      `INSERT INTO products (store_id,name,barcode,stock_quantity,price) VALUES (?,?,?,?,?)`,
+      [storeId, name, safeBarcode, stockQuantity, price]
     );
     if (!result.affectedRows) throw Error;
 
