@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 
+import cors from 'cors';
+//
 import { endpointNotFoundHandler, errorHandler } from './middlewares/error.middleware';
 import inventoryRouter from './routes/inventory.route';
 import authRouter from './routes/auth.route';
@@ -14,7 +16,17 @@ const BASE_URL = `/api/v1`;
 
 dotenv.config();
 
+const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
+
 const app = express();
+
+app.use(
+  cors({
+    origin: allowed,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  })
+);
 
 app.use(express.json());
 
