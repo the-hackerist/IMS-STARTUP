@@ -3,18 +3,23 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let connection: mysql.Pool;
+const host = process.env.DB_HOST;
+const user = process.env.DB_USER;
+const password = process.env.DB_PASS;
+const database = process.env.DB_NAME;
+const port = Number(process.env.DB_PORT || 3306);
 
-try {
-  connection = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    database: process.env.DB_NAME,
-    port: +(process.env.DB_PORT || 3306),
-  });
-} catch (error) {
-  throw Error;
-}
+const poolConfig: mysql.PoolOptions = {
+  host,
+  user,
+  password,
+  database,
+  port,
+  waitForConnections: true,
+};
+
+if (process.env.DB_SSL === 'true') poolConfig.ssl = { rejectUnauthorized: false };
+
+const connection = mysql.createPool(poolConfig);
 
 export default connection;
