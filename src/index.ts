@@ -25,6 +25,8 @@ app.use(`${BASE_URL}/pos`, posRouter);
 app.use('/*splat', endpointNotFoundHandler);
 app.use(errorHandler);
 
-app.listen(process.env.SERVER_PORT, () => {
-  console.log(`🚀 App is running on http://localhost:${process.env.SERVER_PORT}`);
+const port = process.env.PORT || process.env.SERVER_PORT || 8080;
+
+app.listen(port, () => {
+  console.log(`🚀 Server is now running`);
 });
